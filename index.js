@@ -1,64 +1,75 @@
 const express = require("express");
-const app = express();
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
-const session = require('express-session');
+const cors = require("cors");
+
 dotenv.config();
-// const passport = require("passport");
-// const { loginCheck } = require("./auth/passport");
-// loginCheck(passport);
 
-// Mongo DB conncetion
+const app = express();
+
+// MongoDB connection
 const database = process.env.MONGOLAB_URI;
-console.log('database')
-console.log(database)
+console.log('Database URL:', database);
+
 mongoose
-  .connect(database)
-  .then(() => console.log("connected"))
-  .catch((err) => console.log(err));
+  .connect(database, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("Database connected"))
+  .catch((err) => console.log("Database connection error:", err));
 
-app.set("view engine", "ejs");
+// Middleware for parsing JSON bodies
+app.use(express.json());
 
-//BodyParsing
-app.use(express.urlencoded({ extended: false }));
-app.use(session({
-  secret: 'oneboy',
-  saveUninitialized: true,
-  resave: true
-}));
+// Enable CORS for all routes and origins
+app.use(cors());
 
-
-//Routes
-// app.use("/", require("./routes/login"));
-
+// Model
 const Product = require('./models/Product');
 
-app.get('/', async (req, res) => {
-  const products = await Product.find();
-  res.render('index', { products: products });
+// Get all products
+app.get('/products', async (req, res) => {
+  try {
+    const products = await Product.find();
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-app.post('/add-product', async (req, res) => {
-  const productName = req.body.name;
-  const newProduct = new Product({ name: productName, purchased: false });
-  await newProduct.save();
-  res.redirect('/');
+// Add a new product
+app.post('/products', async (req, res) => {
+  const { name } = req.body;
+  const newProduct = new Product({ name: name, purchased: false });
+
+  try {
+    const savedProduct = await newProduct.save();
+    res.status(201).json(savedProduct);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
 });
 
-app.post('/toggle-purchase/:id', async (req, res) => {
-  const productId = req.params.id;
-  const product = await Product.findById(productId);
-  product.purchased = !product.purchased;
-  await product.save();
-  res.redirect('/');
+// Toggle purchase status of a product
+app.patch('/products/:id/toggle-purchase', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    product.purchased = !product.purchased;
+    await product.save();
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-app.post('/delete-product/:id', async (req, res) => {
-  const productId = req.params.id;
-  await Product.deleteOne({ _id: productId });
-  res.redirect('/');
+// Delete a product
+app.delete('/products/:id', async (req, res) => {
+  try {
+    await Product.deleteOne({ _id: req.params.id });
+    res.json({ message: 'Product deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-const PORT = process.env.PORT || 4111;
+const PORT = process.env.PORT || 411;
 
-app.listen(PORT, console.log("Server has started at port " + PORT));
+app.listen(PORT, () => console.log("Server has started at port " + PORT));
